@@ -265,7 +265,7 @@ impl StatsdDeserializer {
             socket_mode: Some(SocketMode::Udp),
             // The other modes emit a different `EventsReceived`.
             events_received: Some(register!(EventsReceived)),
-            parser: Parser::new(sanitize, convert_to),
+            parser: Parser::new(sanitize, convert_to, true),
         }
     }
 
@@ -273,7 +273,7 @@ impl StatsdDeserializer {
         Self {
             socket_mode: None,
             events_received: None,
-            parser: Parser::new(sanitize, convert_to),
+            parser: Parser::new(sanitize, convert_to, true),
         }
     }
 
@@ -282,7 +282,7 @@ impl StatsdDeserializer {
         Self {
             socket_mode: Some(SocketMode::Unix),
             events_received: None,
-            parser: Parser::new(sanitize, convert_to),
+            parser: Parser::new(sanitize, convert_to, true),
         }
     }
 }

@@ -5,6 +5,7 @@ use std::{
     sync::LazyLock,
 };
 
+use chrono::Utc;
 use regex::Regex;
 
 use crate::{
@@ -20,13 +21,19 @@ static NONALPHANUM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^a-zA-Z_\-0
 pub struct Parser {
     sanitize: bool,
     convert_to: ConversionUnit,
+    include_timestamp: bool,
 }
 
 impl Parser {
-    pub const fn new(sanitize_keys: bool, convert_to: ConversionUnit) -> Self {
+    pub const fn new(
+        sanitize_keys: bool,
+        convert_to: ConversionUnit,
+        include_timestamp: bool,
+    ) -> Self {
         Self {
             sanitize: sanitize_keys,
             convert_to,
+            include_timestamp,
         }
     }
 
@@ -66,6 +73,7 @@ impl Parser {
         };
         let tags = tags.filter(|s| s.starts_with('#'));
         let tags = tags.map(parse_tags).transpose()?;
+        let now = self.include_timestamp.then_some(Utc::now());
 
         let metric = match metric_type {
             "c" => {
@@ -77,6 +85,7 @@ impl Parser {
                         value: val * sample_rate,
                     },
                 )
+                .with_timestamp(now)
                 .with_tags(tags)
             }
             unit @ "h" | unit @ "ms" | unit @ "d" => {
@@ -96,6 +105,7 @@ impl Parser {
                         statistic: convert_to_statistic(unit),
                     },
                 )
+                .with_timestamp(now)
                 .with_tags(tags)
             }
             "g" => {
@@ -112,6 +122,7 @@ impl Parser {
 
                 match parse_direction(parts[0])? {
                     None => Metric::new(name, MetricKind::Absolute, MetricValue::Gauge { value })
+                        .with_timestamp(now)
                         .with_tags(tags),
                     Some(sign) => Metric::new(
                         name,
@@ -120,6 +131,7 @@ impl Parser {
                             value: value * sign,
                         },
                     )
+                    .with_timestamp(now)
                     .with_tags(tags),
                 }
             }
@@ -130,6 +142,7 @@ impl Parser {
                     values: vec![parts[0].into()].into_iter().collect(),
                 },
             )
+            .with_timestamp(now)
             .with_tags(tags),
             other => return Err(ParseError::UnknownMetricType(other.into())),
         };
@@ -245,17 +258,17 @@ mod test {
     use crate::event::metric::{Metric, MetricKind, MetricValue, StatisticKind};
     use crate::sources::statsd::ConversionUnit;
 
-    const SANITIZING_PARSER: Parser = Parser::new(true, ConversionUnit::Seconds);
+    const SANITIZING_PARSER: Parser = Parser::new(true, ConversionUnit::Seconds, true);
     fn parse(packet: &str) -> Result<Metric, ParseError> {
         SANITIZING_PARSER.parse(packet)
     }
 
-    const NON_CONVERTING_PARSER: Parser = Parser::new(true, ConversionUnit::Milliseconds);
+    const NON_CONVERTING_PARSER: Parser = Parser::new(true, ConversionUnit::Milliseconds, true);
     fn parse_non_converting(packet: &str) -> Result<Metric, ParseError> {
         NON_CONVERTING_PARSER.parse(packet)
     }
 
-    const NON_SANITIZING_PARSER: Parser = Parser::new(false, ConversionUnit::Seconds);
+    const NON_SANITIZING_PARSER: Parser = Parser::new(false, ConversionUnit::Seconds, true);
     fn unsanitized_parse(packet: &str) -> Result<Metric, ParseError> {
         NON_SANITIZING_PARSER.parse(packet)
     }
